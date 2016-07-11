@@ -28,10 +28,10 @@ Features
   ![gui explaination](/screenshots/gui-4-hook function.png?raw=true)
   
   ***Hook Input Parameters Only***
-  Choose this if you want to tamper only the input parameters of the function when the function is called. Note: Not all parameters are able to be editable. When such a parameter is encountered, that parameter will be skipped.
+  Choose this if you want to tamper only the input parameters of the function when the function is called. Note: Not all parameters are able to be edited. When such a parameter is encountered, that parameter will be skipped.
   
   ***Hook Return Value Only***
-  Choose this only if you want to tamper with the return values of a function. Note that not all values are able to be editable, nor will it work on a function that returns a void (probably will crash).
+  Choose this only if you want to tamper with the return values of a function. Note that not all values are able to be edited, nor will it work on a function that returns a void (probably will crash).
   
   ***Hook Input and Return Values***
   Choose this if you want to hook and tamper with both the input parameters and the return values of that function.
@@ -39,14 +39,15 @@ Features
   ***Remove Hook***
   Obviously, remove the hook.
   
-  Example, we want to analyze the parameteres and the result of the return value of the function "boolean a(android.content.Context, java.lang.String)". We select the "Hook Input and Return Values" option.
-  When the function is called, we get a prompt that shows us the String paramter as shown below:
+  Example, we want to analyze the parameters and the result of the return value of the function "boolean a(android.content.Context, java.lang.String)". We select the "Hook Input and Return Values" option.
+  
+  We entered the string "Secret Password" on our target application and clicked on the "VERIFY PASSWORD" button that triggered the function. When the function is called, we get a prompt that shows us the String paramter as shown below, looks like our user input is passed into this function. Here we are free to modify the string in the prompt if we want to, perhaps bypass user input restrictions?
   ![gui explaination](/screenshots/gui-5-intercept param.png?raw=true)
   
-  In this case, we entered the string "Secret Password" and clicked on the "VERIFY PASSWORD" button that triggered the function. We are free to modify the string here in the prompt if we wish to. After we click on "OK", the function will the return the boolean "false" (obviously as we did not enter the right password). Once again as we selected the option to hook the return value as well, we are presented with the next prompt as shown below:
+  After we click on "OK", the function returns the boolean "false" (obviously as we did not enter the right password). Once again, as we selected the option to hook the return value as well, we are presented with the next prompt as shown below:
   ![gui explaination](/screenshots/gui-6-intercept return.png?raw=true)
   
-  Here as this is a boolean, we get the option to make it return true or false. In this case the function returned "false", let's turn that into a true by editing it to "true" and we click "OK" again.
+  Here as this is a boolean, we get the option to make it return true or false. In this case the function returned "false", let's turn that into a true by editing it to "true" and we click "OK" again. Note that putting anything else than what the function expects will cause it to crash.
   ![gui explaination](/screenshots/gui-7-success.png?raw=true)
   
   The application also supports custom objects that are passed around to functions:
