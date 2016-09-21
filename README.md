@@ -57,14 +57,27 @@ Features
   ![gui explaination](/screenshots/gui-9-intercept return value.png?raw=true)
   
 ### Options Tab
-  The "Options" tab allows the user to turn on / off the trace mode. Turn this mode on and launch the application and mess around with it. Logcat will show a trace of all the functions of the application that were called.
+  The "Options" tab offers the user 2 functions. Mainly "Trace mode", and also "Canary mode". 
+  
+  The "Trace mode" toggle allows the user to turn on / off the trace mode. Turn this mode on, launch the application and mess around with it. Logcat will show a trace of all the functions of the application that were called.
   Options tab GUI:
-  ![gui explaination](/screenshots/gui-12-tracemode.png?raw=true)
+  ![gui explaination](/screenshots/gui-13-canary-mode.png?raw=true)
   
   Logcat output of the teamsik application:
   ![gui explaination](/screenshots/gui-11-tracemode-output.png?raw=true)
   
-  The hooking function and the trace mode functions are exclusive, and can only work when the other is off. Remember to turn off the trace mode when you want to start hooking functions!
+  The hooking function, trace mode and the canary mode (more details below) functions are exclusive, and can only work when the other is off. Remember to turn off the trace mode when you want to start hooking functions!
+  
+  The "Canary mode" toggle allows the user to define a unique canary token, in the screenshot above, the value of "deadbeef". In the demo application screenshot below, we enter the string "deadbeef" into the input text and we click the "VERIFY PASSWORD" button.
+  ![gui explaination](/screenshots/gui-15-canary-input.png?raw=true)
+  
+  Any functions that receives a parameter with the value of the canary token will be printed out to logcat as shown in the screenshot below:
+  ![gui explaination](/screenshots/gui-16-canary-result.png?raw=true)
+  
+  The "Canary mode" just like trace mode, works exclusively by itself. When in this mode, you will not be able to modify/hook on the fly.
+  
+  Upon connecting to the Android application with the client, if the canary mode is turned on, a prompt will alert you that canary mode is turned on.
+  ![gui explaination](/screenshots/gui-14-canary-mode-alert.png?raw=true)
   
 ### Accompanying Android Application
   There is nothing fancy about the accompanying android application. Just an on/off switch.
