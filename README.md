@@ -7,6 +7,8 @@ Not a debugger (NAD) was created to perform run time analysis, tracing and tampe
 
 NAD provides an user interface written in Java, which allows the user to connect to the accompanying Android application using their testing machine. This allows convenient manipulation of Android parameters and hooks.
 
+This application is built upon the Xposed Framework and it is necessary for this to work. This is just a POC so expect it to break, turn on logcat to view any error messages.
+
 Features
 --------
 
