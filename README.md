@@ -22,8 +22,10 @@ Features
   Selecting the application to analyze is as easy as double clicking on the package name on the list displayed and confirming your selection.
   ![gui explaination](/screenshots/gui-2-hook.png?raw=true)
   
+  Note, ensure that the application you have selected to hook is not running in the background after selection. NAD only analyzes the application classes and methods of the application when it is starting up. If it is running, kill it with the task manager or something similar. 
+  
 ### Functions Tab
-  Launch the application and browse to the "Functions" tab, it will list out the functions within the application to be analyzed. 
+  After hooking using the "Apps" tab, launch the application and browse to the "Functions" tab, it will list out the functions within the application to be analyzed. 
   ![gui explaination](/screenshots/gui-3-functions.png?raw=true)
   
   To hook a function, double click on the function and select what you would like to hook.
