@@ -19,7 +19,7 @@
             android:value="Not a debugger" />
         <meta-data
             android:name="xposedminversion"
-            android:value="30" />
+            android:value="54" />
 
 
         <activity

@@ -22,6 +22,6 @@ android {
 dependencies {
     compile fileTree(dir: 'libs', include: ['*.jar'])
     compile 'com.android.support:appcompat-v7:23.0.1'
-    provided files('lib/XposedBridgeApi-54.jar')
+    provided files('lib/api-82.jar')
     compile files('libs/xstream-1.4.7.jar')
 }

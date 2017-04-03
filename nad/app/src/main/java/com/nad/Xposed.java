@@ -8,7 +8,9 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.ApplicationInfo;
 import android.os.AsyncTask;
+import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
@@ -16,14 +18,17 @@ import android.util.Log;
 
 import com.thoughtworks.xstream.XStream;
 
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.security.Provider;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.HashMap;
@@ -40,19 +45,20 @@ import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 import shared.HookStates;
+import shared.HookedMethodInfo;
 import shared.MethodInfo;
 import shared.ParameterInfo;
 
 /**
  * Created by Administrator on 4/28/2016.
  */
-public class Xposed implements IXposedHookLoadPackage, IXposedHookZygoteInit {
+public class Xposed implements IXposedHookLoadPackage/*, IXposedHookZygoteInit*/ {
 
     XSharedPreferences selectedAppPref;
     HashMap<String, ArrayList<String>> classAndMethodsList = new HashMap<>();
     private Context targetContext;
     final ConcurrentHashMap<String, XC_MethodHook.Unhook> hookedMethodList = new ConcurrentHashMap<>();
-    final HashMap<String, ArrayList<String>> hookedMethodsTracker = new HashMap<>();
+    final HashMap<String, ArrayList<HookedMethodInfo>> hookedMethodsTracker = new HashMap<>();
     private final Object mPauseLock = new Object();
     private boolean mPaused;
     private MethodInfo globalMethodInfo;
@@ -76,7 +82,6 @@ public class Xposed implements IXposedHookLoadPackage, IXposedHookZygoteInit {
         The name of the application to be hooked is stored with the key "app" in selectedAppPref
          */
         selectedApp = selectedAppPref.getString("app", "");
-
         XSharedPreferences traceModePref = new XSharedPreferences("com.nad", "NAD_TRACE_MODE");
         traceModePref.makeWorldReadable();
         traceMode = traceModePref.getBoolean("traceMode", false);
@@ -97,11 +102,33 @@ public class Xposed implements IXposedHookLoadPackage, IXposedHookZygoteInit {
         disableANR = disableANRStatusPref.getBoolean("anrDisable", false);
         */
 
+        if(lpparam.packageName.equals("android")) {
+            Log.v("nad", "SELECTED APPLICATION IS: " + selectedApp);
+            Class ActivityManagerServiceClazz = null;
+            try
+            {
+                ActivityManagerServiceClazz = XposedHelpers.findClass("com.android.server.am.ActivityManagerService", lpparam.classLoader);
+            }
+            catch(XposedHelpers.ClassNotFoundError e)
+            {
+                Log.v("nad", "unable to hook activitymangerservice in app start");
+            }
+            if (ActivityManagerServiceClazz != null) {
+                Log.v("nad", "ANR: hooking activitymanagerservie from application side");
+                XposedBridge.hookAllMethods(ActivityManagerServiceClazz, "appNotResponding", new XC_MethodReplacement() {
+                    @Override
+                    protected Object replaceHookedMethod(MethodHookParam methodHookParam) throws Throwable {
+                        if (disableANR)
+                            return null;
+                        else
+                            return XposedBridge.invokeOriginalMethod(methodHookParam.method, methodHookParam.thisObject, methodHookParam.args);
+                    }
+                });
+            } else {
+                Log.v("nad", "ANR: failed to hook activitymanagerservie from application side");
 
-/*
-        Class<?> foundClass = XposedHelpers.findClass("com.android.server.am.MainHandler", lpparam.classLoader);
-        Method foundMethod = XposedHelpers.findMethodExact(foundClass, "validateNotAppThread");
-  */
+            }
+        }
 
         if(!lpparam.packageName.equals(selectedApp))
             return;
@@ -116,6 +143,8 @@ public class Xposed implements IXposedHookLoadPackage, IXposedHookZygoteInit {
 
         analyzeApp(sourceDir, lpparam);
 
+        loadHookedMethodsFromFile(lpparam);
+
         long endTime = System.nanoTime();
 
         long duration = (endTime - startTime);
@@ -124,7 +153,67 @@ public class Xposed implements IXposedHookLoadPackage, IXposedHookZygoteInit {
 
     }
 
+    public void loadHookedMethodsFromFile(XC_LoadPackage.LoadPackageParam lpparam)
+    {
+        /*
+        Here we load a list of hooked methods from the application's data/files directory and we hook them when the application starts
+         */
+        HashMap<String, ArrayList<String>> hm = new HashMap<String, ArrayList<String>>();
 
+        FileInputStream fileInputStream  = null;
+        try {
+            ApplicationInfo appInfo = AndroidAppHelper.currentApplicationInfo();
+            //appInfo.dataDir will return path to the app data directory.
+            //The files written by context.OpenFileOutput reside in dataDir/files/xxx in 4.4 and 6.0. So I'm just going to hard code them here.
+            //Not sure why I decided to move away from sharedpreferences, would have saved me so much trouble.
+            fileInputStream = new FileInputStream(appInfo.dataDir+"/files/"+"nad_hooked_methods.dat");
+
+        } catch (/*FileNotFoundException*/Exception e) {
+            Log.v("nad", "no previous data file found, wont be loading any hooks from the start");
+        }
+
+        ObjectInputStream objectInputStream = null;
+        try {
+            objectInputStream = new ObjectInputStream(fileInputStream);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        try {
+            hm = (HashMap) objectInputStream.readObject();
+        } catch (ClassNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        try {
+            objectInputStream.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        for (Object ob : hm.entrySet())
+        {
+            //an entry has a class name as a key and an arraylist of method names as a value
+            Map.Entry entry = (Map.Entry) ob;
+            try {
+                //entry.getKey() gets the class name
+                //Log.v("nad","-->> class: " + entry.getKey());
+                //ArrayList<String> arrayListOfMethods = new ArrayList<>();
+
+                //entry.getValue will return an ArrayList of HookedMethodInfo
+                for(HookedMethodInfo hmi : (ArrayList<HookedMethodInfo>)entry.getValue())
+                {
+                    //Log.v("nad", "---->> method: " + hmi.getMethodName());
+                    //arrayListOfMethods.add(hmi.getMethodName());
+                    generateHook(entry.getKey().toString()+":"+hmi.getMethodName(), hmi.getHookType().toString(), lpparam);
+                }
+            } catch (Exception e) {
+                Log.e("nad", e.toString());
+            }
+        }
+
+    }
 
     public void analyzeApp(String sourceDir, final XC_LoadPackage.LoadPackageParam lpparam)
     {
@@ -275,7 +364,7 @@ public class Xposed implements IXposedHookLoadPackage, IXposedHookZygoteInit {
                                                 AndroidAppHelper.currentApplication().getApplicationContext().registerReceiver(myDiorandReceiver, changeFilter, null, handlerx);
                                             }
                                         };
-                                                XposedBridge.hookMethod(foundMethod, xcMethodHook);
+                                        XposedBridge.hookMethod(foundMethod, xcMethodHook);
                                     }
                                     else if(traceMode == true && canaryMode == false)
                                     {
@@ -298,15 +387,16 @@ public class Xposed implements IXposedHookLoadPackage, IXposedHookZygoteInit {
 
         }
         Log.v("nad", "Done analyzing");
+
     }
 
-    public void generateTraceHook(Class foundClass, final Method foundMethod, XC_LoadPackage.LoadPackageParam lpparam) {
+    public void generateTraceHook(final Class foundClass, final Method foundMethod, XC_LoadPackage.LoadPackageParam lpparam) {
         final Method method = null;
         if (foundClass != null && !foundClass.isInterface()) {
             XC_MethodHook xcMethodHook = new XC_MethodHook() {
                 @Override
                 protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                    Log.v("nad", Util.generateHRMD(foundMethod) + " was called.");
+                    Log.v("nad", foundClass.getName() + ": " + Util.generateHRMD(foundMethod) + " was called.");
                 }
             };
 
@@ -317,7 +407,7 @@ public class Xposed implements IXposedHookLoadPackage, IXposedHookZygoteInit {
         }
     }
 
-    public void generateCanaryHook(Class foundClass, final Method foundMethod, XC_LoadPackage.LoadPackageParam lpparam) {
+    public void generateCanaryHook(final Class foundClass, final Method foundMethod, XC_LoadPackage.LoadPackageParam lpparam) {
         final Method method = null;
         if (foundClass != null && !foundClass.isInterface()) {
             XC_MethodHook xcMethodHook = new XC_MethodHook() {
@@ -329,7 +419,7 @@ public class Xposed implements IXposedHookLoadPackage, IXposedHookZygoteInit {
                         if (param.args[i] instanceof String)
                         {
                             if (((String) param.args[i]).contains(canaryToken)){
-                                Log.v("nad", Util.generateHRMD(foundMethod) + " contains canary token");
+                                Log.v("nad", foundClass.getName() + ": " + Util.generateHRMD(foundMethod) + " contains canary token");
                             }
                         }
                     }
@@ -528,15 +618,28 @@ public class Xposed implements IXposedHookLoadPackage, IXposedHookZygoteInit {
         /*
         update the tracker for display purposes
          */
+        HookedMethodInfo tempHookedMethodInfo = new HookedMethodInfo(elements[1], HookStates.valueOf(hookedState));
         if(hookedMethodsTracker.containsKey(elements[0]))
         {
+            /*
             if(!hookedMethodsTracker.get(elements[0]).contains(elements[1]))
                 hookedMethodsTracker.get(elements[0]).add(elements[1]);
+            */
+            boolean found = false;
+            for(HookedMethodInfo mhi : hookedMethodsTracker.get(elements[0]))
+            {
+                if(mhi.getMethodName().equals(elements[1]))
+                    found = true;
+            }
+            if(!found)
+            {
+                hookedMethodsTracker.get(elements[0]).add(tempHookedMethodInfo);
+            }
         }
         else
         {
-            ArrayList<String> methodsList = new ArrayList();
-            methodsList.add(elements[1]);
+            ArrayList<HookedMethodInfo> methodsList = new ArrayList();
+            methodsList.add(tempHookedMethodInfo);
             hookedMethodsTracker.put(elements[0], methodsList);
         }
         updateHookedMethodsFile();
@@ -558,7 +661,15 @@ public class Xposed implements IXposedHookLoadPackage, IXposedHookZygoteInit {
             String methodName =  elements[1];
             if(hookedMethodsTracker.containsKey(className))
             {
-                hookedMethodsTracker.get(className).remove(methodName);
+                for(HookedMethodInfo hmi:hookedMethodsTracker.get(className))
+                {
+                    if(hmi.getMethodName().equals(methodName))
+                    {
+                        hookedMethodsTracker.get(className).remove(hmi);
+                    }
+                }
+                // no longer needing this as we've changed it to HookedMethodInfo
+                // hookedMethodsTracker.get(className).remove(methodName);
             }
             else
             {
@@ -646,88 +757,39 @@ public class Xposed implements IXposedHookLoadPackage, IXposedHookZygoteInit {
     }
 
     /*
-    public static Activity getActivity() {
-        Class activityThreadClass = null;
-        try {
-            activityThreadClass = Class.forName("android.app.ActivityThread");
-        } catch (ClassNotFoundException e) {
-            e.printStackTrace();
-        }
-        Object activityThread = null;
-        try {
-            activityThread = activityThreadClass.getMethod("currentActivityThread").invoke(null);
-        } catch (IllegalAccessException e) {
-            e.printStackTrace();
-        } catch (InvocationTargetException e) {
-            e.printStackTrace();
-        } catch (NoSuchMethodException e) {
-            e.printStackTrace();
-        }
-        Field activitiesField = null;
-        try {
-            activitiesField = activityThreadClass.getDeclaredField("mActivities");
-        } catch (NoSuchFieldException e) {
-            e.printStackTrace();
-        }
-        activitiesField.setAccessible(true);
-
-        Map<Object, Object> activities = null;
-        try {
-            activities = (Map<Object, Object>) activitiesField.get(activityThread);
-        } catch (IllegalAccessException e) {
-            e.printStackTrace();
-        }
-        if(activities == null)
-            return null;
-
-        for (Object activityRecord : activities.values()) {
-            Class activityRecordClass = activityRecord.getClass();
-            Field pausedField = null;
-            try {
-                pausedField = activityRecordClass.getDeclaredField("paused");
-            } catch (NoSuchFieldException e) {
-                e.printStackTrace();
-            }
-            pausedField.setAccessible(true);
-            try {
-                if (!pausedField.getBoolean(activityRecord)) {
-                    Field activityField = null;
-                    try {
-                        activityField = activityRecordClass.getDeclaredField("activity");
-                    } catch (NoSuchFieldException e) {
-                        e.printStackTrace();
-                    }
-                    activityField.setAccessible(true);
-                    Activity activity = null;
-                    try {
-                        activity = (Activity) activityField.get(activityRecord);
-                    } catch (IllegalAccessException e) {
-                        e.printStackTrace();
-                    }
-                    return activity;
-                }
-            } catch (IllegalAccessException e) {
-                e.printStackTrace();
-            }
-        }
-        return null;
-    }
-    */
-
     @Override
     public void initZygote(StartupParam startupParam) throws Throwable {
 
-        Class ActivityManagerServiceClazz = XposedHelpers.findClass("com.android.server.am.ActivityManagerService", null);
+        Class ActivityManagerServiceClazz = null;
+        //Search for activity manager in 4.4 onwards till 5.0
+        //ActivityManagerServiceClazz = XposedHelpers.findClassIfExists("com.android.server.am.ActivityManagerService", null);
+        try {
+            ActivityManagerServiceClazz = XposedHelpers.findClass("com.android.server.am.ActivityManagerService", null);
+        }
+        catch (XposedHelpers.ClassNotFoundError e)
+        {
+            Log.v("nad", "could not hook activitymanagerservice in init");
+        }
+        if(ActivityManagerServiceClazz != null) {
+            Log.v("nad", "ANR: hooking activitymanagerservice during init");
+            XposedBridge.hookAllMethods(ActivityManagerServiceClazz, "appNotResponding", new XC_MethodReplacement() {
+                @Override
+                protected Object replaceHookedMethod(MethodHookParam methodHookParam) throws Throwable {
+                    if (disableANR)
+                        return null;
+                    else
+                        return XposedBridge.invokeOriginalMethod(methodHookParam.method, methodHookParam.thisObject, methodHookParam.args);
+                }
+            });
+        }
+        else
+        {
+            Log.v("nad", "ANR: did not hook activitymanagerservice during init");
+        }
 
-        XposedBridge.hookAllMethods(ActivityManagerServiceClazz, "appNotResponding", new XC_MethodReplacement() {
-            @Override
-            protected Object replaceHookedMethod(MethodHookParam methodHookParam) throws Throwable {
-                if(disableANR)
-                    return null;
-                else
-                    return XposedBridge.invokeOriginalMethod(methodHookParam.method, methodHookParam.thisObject, methodHookParam.args);
-            }
-        });
 
     }
+
+    */
+
 }

@@ -41,6 +41,7 @@ import java.util.Map;
 import java.util.Set;
 
 import shared.HookStates;
+import shared.HookedMethodInfo;
 import shared.MethodInfo;
 
 public class MainActivity extends AppCompatActivity {
@@ -374,6 +375,7 @@ public class MainActivity extends AppCompatActivity {
         return packageSourceDir;
     }
 
+
     public void getHookedMethods()
     {
         Log.v("nad", "hai");
@@ -488,7 +490,13 @@ public class MainActivity extends AppCompatActivity {
             JSONArray tmpArray = null;
             try {
                 tmp.put("class", entry.getKey());
-                tmpArray = new JSONArray((ArrayList<String>) entry.getValue());
+                ArrayList<String> arrayListOfMethods = new ArrayList<>();
+                //entry.getValue will return an ArrayList of HookedMethodInfo
+                for(HookedMethodInfo hmi : (ArrayList<HookedMethodInfo>)entry.getValue())
+                {
+                    arrayListOfMethods.add(hmi.getMethodName());
+                }
+                tmpArray = new JSONArray(arrayListOfMethods);
                 tmp.put("methods", tmpArray);
             } catch (JSONException e) {
                 Log.e("diorand", e.toString());
