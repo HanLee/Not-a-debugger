@@ -86,3 +86,8 @@ Features
 ### Accompanying Android Application
   There is nothing fancy about the accompanying android application. Just an on/off switch.
   ![gui explaination](/screenshots/gui-10-android.png?raw=true)
+
+### TODO
+  1) Perform analysis on the application when the user selects the application to hook instead of when the application starts
+  2) Consolidate data files dropped on the target application
+  
