@@ -143,7 +143,8 @@ public class Xposed implements IXposedHookLoadPackage/*, IXposedHookZygoteInit*/
 
         analyzeApp(sourceDir, lpparam);
 
-        loadHookedMethodsFromFile(lpparam);
+        if(!traceMode && !canaryMode)
+            loadHookedMethodsFromFile(lpparam);
 
         long endTime = System.nanoTime();
 
