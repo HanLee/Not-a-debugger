@@ -46,7 +46,7 @@ Features
   Example, we want to analyze the parameters and the result of the return value of the function "boolean a(android.content.Context, java.lang.String)". We select the "Hook Input and Return Values" option.
   
   We entered the string "Secret Password" on our target application and clicked on the "VERIFY PASSWORD" button that triggered the function. When the function is called, we get a prompt that shows us the String paramter as shown below, looks like our user input is passed into this function. Here we are free to modify the string in the prompt if we want to, perhaps bypass user input restrictions?
-  ![gui explaination](/screenshots/gui-5-intercept param.png?raw=true)
+![gui explaination](/screenshots/gui-5-intercept param.png?raw=true)
   
   After we click on "OK", the function returns the boolean "false" (obviously as we did not enter the right password). Once again, as we selected the option to hook the return value as well, we are presented with the next prompt as shown below:
   ![gui explaination](/screenshots/gui-6-intercept return.png?raw=true)
